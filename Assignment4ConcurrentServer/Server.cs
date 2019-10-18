@@ -1,50 +1,17 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
-using System.IO;
+using System.Net;
 using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Assignment4ConcurrentServer
 {
-    class Program
+    class Server
     {
-        [Obsolete]
-        static void Main(string[] args)
-        {
-            Console.WriteLine("Hello World!");
-
-
-
-            TcpListener serverSocket = new TcpListener(6789);
-            serverSocket.Start();
-
-            Console.WriteLine("server started witing for connection!");
-
-            TcpClient connectionSocket = serverSocket.AcceptTcpClient();
-            //Socket connectionSocket = serverSocket.AcceptSocket();
-            Console.WriteLine("Server activated");
-
-            Stream ns = connectionSocket.GetStream();
-            // Stream ns = new NetworkStream(connectionSocket);
-
-            StreamReader sr = new StreamReader(ns);
-            StreamWriter sw = new StreamWriter(ns);
-            sw.AutoFlush = true; // enable automatic flushing
-
-            string message = sr.ReadLine();
-            string answer = "";
-            while (message != null && message != "")
-            {
-                Console.WriteLine("Client: " + message);
-                answer = message.ToUpper();
-                sw.WriteLine(answer);
-                message = sr.ReadLine();
-            }
-
-            ns.Close();
-            connectionSocket.Close();
-            serverSocket.Stop();
-        }
-        public List<Book> books = new List<Book>()
+        static List<Book> books = new List<Book>()
         {
             new Book("FreedomFighter","Popular",68,"1234567896543"),
             new Book("CountryLove","Khem",123,"1239567896542"),
@@ -53,10 +20,101 @@ namespace Assignment4ConcurrentServer
             new Book("Algebra","Michel",698,"1234568896513"),
             new Book("Lyrics","William",65,"1234567896842"),
         };
+        public void Start()
+        {
+            TcpListener server = null;
+            try
+            {
+                // Set the TcpListener
+                Int32 port = 4646;
+                IPAddress localAddr = IPAddress.Loopback;
+
+                int clientNumber = 0;
+
+                // TcpListener server = new TcpListener(port);
+                server = new TcpListener(localAddr, port);
+
+                // Start listening for client requests.
+                server.Start();
+
+                // Enter the listening loop.
+                while (true)
+                {
+                    Console.Write("Waiting for a connection... ");
+
+                    // Perform a blocking call to accept requests.
+                    // You could also user server.AcceptSocket() here.
+                    TcpClient client = server.AcceptTcpClient();
+                    Console.WriteLine("Connected!");
+
+                    Task.Run(() => HandleStream(client, ref clientNumber));
+                }
+            }
+            catch (SocketException e)
+            {
+                Console.WriteLine("SocketException: {0}", e);
+            }
+            finally
+            {
+                // Stop listening for new clients.
+                server.Stop();
+            }
+            Console.WriteLine("\nHit enter to continue...");
+            Console.Read();
+        }
+
+        public void HandleStream(TcpClient client, ref int clientNumber)
+        {
+            // Buffer for reading data
+            Byte[] bytes = new Byte[256];
+            String data = null;
+            clientNumber++;
+
+            // Get a stream object for reading and writing
+            NetworkStream stream = client.GetStream();
+
+            int i;
+
+            // Loop to receive all the data sent by the client.
+            while ((i = stream.Read(bytes, 0, bytes.Length)) != 0)
+            {
+                // Translate data bytes to a ASCII string.
+                data = System.Text.Encoding.ASCII.GetString(bytes, 0, i);
+                Console.WriteLine("Received: {0} from client {1}", data, clientNumber);
+
+                // Process the data sent by the client.
+
+                string mess = "not valid command";
+                string[] words = data.ToLower().Split(' ');
+                if (words[0].Trim() == "getall")
+                {
+                    mess = JsonConvert.SerializeObject(books);
+                }
+                if (words[0].Trim() == "get")
+                {
+                    mess = JsonConvert.SerializeObject(books.Find(e => e.Isbn13 == words[1]));
+                }
+                if (words[0].Trim() == "save")
+                {
+                    books.Add(JsonConvert.DeserializeObject<Book>(words[1]));
+                    mess = "";
+                }
+
+
+                //encode message
+                byte[] msg = System.Text.Encoding.ASCII.GetBytes(mess);
+
+                Thread.Sleep(1000);
+
+                // Send back a response.
+                stream.Write(msg, 0, msg.Length);
+                Console.WriteLine("Sent: {0}", mess);
+            }
+
+            // Shutdown and end connection
+            client.Close();
+            clientNumber--;
+        }
+
     }
 }
-
-        
-    
-    
-
