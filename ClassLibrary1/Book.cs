@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace Assignment4ConcurrentServer
+namespace ClassLibrary1
 {
     public class Book
     {
